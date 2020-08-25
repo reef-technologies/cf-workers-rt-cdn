@@ -4,15 +4,15 @@ account_id = "your_account_id"
 zone_id = "your_zone_id"
 workers_dev = false
 webpack_config = "webpack.config.js"
-route = "cdn-dev.example.com/*"
-vars = {RT_ORIGIN_HOSTNAME = "example-dev.s3.amazonaws.com"}
+route = "example.com/cdn-cgi-dev/*"
+vars = {PREFIX = "/cdn-cgi-dev/"}
 
 [env.staging]
 name = "cdn-staging"
-route = "cdn-staging.example.com/*"
-vars = {RT_ORIGIN_HOSTNAME = "example-staging.s3.amazonaws.com"}
+route = "example.com/cdn-cgi-staging/*"
+vars = {PREFIX = "/cdn-cgi-staging/"}
 
 [env.production]
 name = "cdn-prod"
-route = "cdn-prod.example.com/*"
-vars = {RT_ORIGIN_HOSTNAME = "example-prod.s3.amazonaws.com"}
+route = "example.com/cdn-cgi-prod/*"
+vars = {PREFIX = "/cdn-cgi-prod/"}

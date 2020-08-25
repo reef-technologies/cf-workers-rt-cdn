@@ -11,8 +11,10 @@
 
 async def handleRequest(request):
     url = __new__(URL(request.url))
-    url.hostname = RT_ORIGIN_HOSTNAME
-    request = __new__(Request(url.toString(), request))
+    new_url = request.url[len(url.origin + PREFIX):]
+    if not new_url.startswith('https://') and not new_url.startswith('http://'):
+        new_url = url.origin + '/' + new_url
+    request = __new__(Request(new_url, request))
     return await fetch(request)
 
 
