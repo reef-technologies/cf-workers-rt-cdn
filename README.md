@@ -38,7 +38,7 @@ pip install --user transcrypt
 
 1. Set `account_id` and `zone_id` in `wrangler.toml`
     * You can find `account_id` and `zone_id` in the overview page of you site in the Cloudflare Dashboard
-1. Set `route` and `RT_ORIGIN_HOSTNAME` in `wrangler.toml`
+1. Set `route` and `vars` in `wrangler.toml`
     * You can set different environments (default are: `dev`, `staging` and `production`)
 1. Set your Cloudflare API token:
 
