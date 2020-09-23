@@ -5,14 +5,14 @@ zone_id = "your_zone_id"
 workers_dev = false
 webpack_config = "webpack.config.js"
 route = "example.com/cdn-cgi-dev/*"
-vars = { CDN_PREFIX = "/cdn-cgi-dev/", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]" }
+vars = { CDN_PREFIX = "/cdn-cgi-dev/", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]", CDN_CACHE_ENDPOINT = "" }
 
 [env.staging]
 name = "cdn-staging"
 route = "example.com/cdn-cgi-staging/*"
-vars = { CDN_PREFIX = "/cdn-cgi-dev/", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]" }
+vars = { CDN_PREFIX = "/cdn-cgi-dev/", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]", CDN_CACHE_ENDPOINT = "" }
 
 [env.production]
 name = "cdn-prod"
 route = "example.com/cdn-cgi-prod/*"
-vars = { CDN_PREFIX = "/cdn-cgi-dev/", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]" }
+vars = { CDN_PREFIX = "/cdn-cgi-dev/", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]", CDN_CACHE_ENDPOINT = "" }

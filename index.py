@@ -16,6 +16,7 @@ from dataclasses import dataclass
 class Config:
     CDN_ALLOWED_HOSTS = JSON.parse(CDN_ALLOWED_HOSTS)
     CDN_PREFIX = CDN_PREFIX
+    CDN_CACHE_ENDPOINT = CDN_CACHE_ENDPOINT
 
 
 config = Config()
@@ -55,16 +56,27 @@ class Cdn:
     def _parse_endpoint(cls, request):
         url = __new__(URL(request.url))
 
-        new_url = request.url[len(url.origin + config.CDN_PREFIX):]
-        if not new_url.startswith('https:') and not new_url.startswith('http:'):
-            new_url = url.origin + '/' + new_url
+        if not url.pathname.startswith(config.CDN_PREFIX):
+            raise CdnError('wrong CDN prefix in URL: ' + request.url, 400)
 
-        new_url = __new__(URL(new_url))
+        new_raw_url = request.url[len(url.origin + config.CDN_PREFIX):]
 
-        if new_url.host not in config.CDN_ALLOWED_HOSTS:
+        endpoint_class = None
+        if new_raw_url.startswith(config.CDN_CACHE_ENDPOINT):
+            new_raw_url = new_raw_url[len(config.CDN_CACHE_ENDPOINT):]
+            endpoint_class = CacheEndpoint
+        else:
+            raise CdnError('wrong CDN endpoint in URL: ' + request.url, 400)
+
+        if not new_raw_url.startswith('https:') and not new_raw_url.startswith('http:'):
+            new_raw_url = url.origin + '/' + new_raw_url
+
+        new_url = __new__(URL(new_raw_url))
+
+        if new_url.host not in config.CDN_ALLOWED_HOSTS + [url.origin]:
             raise CdnError('host is not allowed: ' + new_url.host, 403)
 
-        return CacheEndpoint(request, new_url)
+        return endpoint_class(request, new_url)
 
 
 async def handleRequest(request):
