@@ -8,32 +8,19 @@
 #
 ######################################################################
 
+import re
 
-from dataclasses import dataclass
 
-
-@dataclass(frozen=True)
 class Config:
+    __slots__ = ('CDN_ALLOWED_HOSTS', 'CDN_PREFIX')
+
     CDN_ALLOWED_HOSTS = JSON.parse(CDN_ALLOWED_HOSTS)
     CDN_PREFIX = CDN_PREFIX
-    CDN_CACHE_ENDPOINT = CDN_CACHE_ENDPOINT
-
-
-config = Config()
 
 
 def log(*args):
     console.log(*args)
 
-
-class CacheEndpoint:
-    def __init__(self, request, url):
-        self.request = request
-        self.url = url
-        log('CacheEndpoint url:', self.url)
-
-    async def fetch(self, response):
-        return await fetch(__new__(Request(self.url, self.request)))
 
 
 class CdnError(Exception):
@@ -42,45 +29,92 @@ class CdnError(Exception):
         self.status_code = status_code
 
 
-class Cdn:
+class CdnRouter:
+    routes = []
+
     def __init__(self, request):
         self.request = request
-        log('Cdn request:', self.request)
-        self.endpoint = self._parse_endpoint(self.request)
-        log('Cdn endpoint:', self.endpoint)
+        log('Request:', self.request)
+        self.resource = self._get_resource(self.request.url)
+        log('Resource:', self.resource)
 
     def fetch(self):
-        return self.endpoint.fetch()
+        return self.resource.fetch(self.request)
 
     @classmethod
-    def _parse_endpoint(cls, request):
-        url = __new__(URL(request.url))
+    def _get_pathname(cls, raw_url):
+        url = __new__(URL(raw_url))
 
-        if not url.pathname.startswith(config.CDN_PREFIX):
-            raise CdnError('wrong CDN prefix in URL: ' + request.url, 400)
+        return raw_url[len(url.origin):]
 
-        new_raw_url = request.url[len(url.origin + config.CDN_PREFIX):]
+    @classmethod
+    def _get_resource(cls, raw_url):
+        pathname = cls._get_pathname(raw_url)
 
-        endpoint_class = None
-        if new_raw_url.startswith(config.CDN_CACHE_ENDPOINT):
-            new_raw_url = new_raw_url[len(config.CDN_CACHE_ENDPOINT):]
-            endpoint_class = CacheEndpoint
-        else:
-            raise CdnError('wrong CDN endpoint in URL: ' + request.url, 400)
+        for route, klass in cls.routes:
+            m = re.fullmatch(route, pathname)
+            if m:
+                return klass(raw_url, *m.groups())
 
-        if not new_raw_url.startswith('https:') and not new_raw_url.startswith('http:'):
-            new_raw_url = url.origin + '/' + new_raw_url
+        raise CdnError('wrong CDN endpoint in URL: ' + raw_url, 400)
 
-        new_url = __new__(URL(new_raw_url))
 
-        if new_url.host not in config.CDN_ALLOWED_HOSTS + [url.origin]:
-            raise CdnError('host is not allowed: ' + new_url.host, 403)
+def route(router, path):
+    def decorator(klass):
+        router.routes.append((path, klass))
+        __pragma__('kwargs')
+        def wrapper(*args, **kwargs):
+            return klass(*args, **kwargs)
+        __pragma__('nokwargs')
+        return wrapper
+    return decorator
 
-        return endpoint_class(request, new_url)
+
+class Resource:
+    def __init__(self, url, origin_url):
+        self.url = url
+        log('URL:', self.url)
+        self.origin_url = self._get_origin_url(origin_url, self.url)
+        log('Origin URL:', self.origin_url)
+
+    async def fetch(self, request):
+        return await fetch(__new__(Request(self.origin_url, request)))
+
+    @classmethod
+    def _get_origin_url(cls, origin_raw_url, raw_url):
+        url = __new__(URL(raw_url))
+
+        if not origin_raw_url.startswith('https:') and not origin_raw_url.startswith('http:'):
+            origin_raw_url = url.origin + '/' + origin_raw_url
+
+        origin_url = __new__(URL(origin_raw_url))
+
+        if origin_url.host not in Config.CDN_ALLOWED_HOSTS + [url.origin]:
+            raise CdnError('host is not allowed: ' + origin_url.host, 403)
+
+        return origin_url
+
+
+@route(CdnRouter, r'{}/cache/(.*)'.format(CDN_PREFIX))
+class CacheResource(Resource):
+    pass
+
+
+# @route(CdnRouter, '{}/image/width=(\d+|auto)/(.*)'.format(CDN_PREFIX))
+# class ImageResource(Resource):
+#     def __init__(self, url, width, origin_url):
+#         Resource.__init__(self, url, origin_url)
+#         self._transform_origin_url(width)
+#         log('Transformed Origin URL:', self.origin_url)
+
+#     def _transform_origin_url(self, width):
+#         origin_url = __new__(URL(self.origin_url))
+#         origin_url.pathname += '-w{}'.format(width)
+#         self.origin_url = origin_url.toString()
 
 
 async def handleRequest(request):
-    cdn = Cdn(request)
+    cdn = CdnRouter(request)
     return cdn.fetch()
 
 
