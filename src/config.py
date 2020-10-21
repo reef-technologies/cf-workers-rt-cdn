@@ -9,7 +9,7 @@
 ######################################################################
 
 # Below variables are fetched from the Wrangler variables
-# You can change it in .env
+# You can change it in .env or directly in wrangler.toml
 
 ENV = CDN_ENV
 DEBUG = CDN_DEBUG != '0'  

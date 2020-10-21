@@ -10,8 +10,8 @@
 
 import re
 
-import config
-import logger
+from src import config
+from src import logger
 
 
 class CdnError(Exception):

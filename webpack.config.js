@@ -1,5 +1,5 @@
 module.exports = {
-    entry: "./index.py",
+    entry: "./src/index.py",
     mode: 'production',
     target: "webworker",
     module: {

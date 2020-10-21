@@ -8,7 +8,7 @@
 #
 ######################################################################
 
-import config
+from src import config
 
 
 def debug(*args):
