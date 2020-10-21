@@ -4,20 +4,14 @@
 #
 # Cloudflare Worker CDN
 #
-# Copyright (c) 2020, Reef Technologies. All Rights Reserved.
+# Copyright (c) 2020, Reef Technologger.debugies. All Rights Reserved.
 #
 ######################################################################
 
 import re
 
 import config
-
-
-
-def log(*args):
-    if config.DEBUG:
-        console.log(*args)
-
+import logger
 
 
 class CdnError(Exception):
@@ -31,9 +25,12 @@ class CdnRouter:
 
     def __init__(self, request):
         self.request = request
-        log('Request:', self.request)
         self.resource = self._get_resource(self.request.url)
-        log('Resource:', self.resource)
+
+        logger.debug('Router:', self)
+
+    def __repr__(self):
+        return '{}(request={})'.format(self.__class__.__name__, self.request)
 
     def fetch(self):
         return self.resource.fetch(self.request)
@@ -53,7 +50,7 @@ class CdnRouter:
             if m:
                 return klass(raw_url, *m.groups())
 
-        raise CdnError('wrong CDN endpoint in URL: ' + raw_url, 400)
+        raise CdnError('wrong URL: ' + raw_url, 400)
 
 
 def route(router, path):
@@ -70,12 +67,21 @@ def route(router, path):
 class Resource:
     def __init__(self, url, origin_url):
         self.url = url
-        log('URL:', self.url)
         self.origin_url = self._get_origin_url(origin_url, self.url)
-        log('Origin URL:', self.origin_url)
 
-    async def fetch(self, request):
-        return await fetch(__new__(Request(self.origin_url, request)))
+        logger.debug('Resource:', self)
+
+    def __repr__(self):
+        return '{}(url={}, origin_url={})'.format(self.__class__.__name__,
+            self.url, self.origin_url)
+
+    async def fetch(self, request, url=None):
+        if url is None:
+            url = self.origin_url
+
+        logger.debug('{}.fetch URL:'.format(self.__class__.__name__), url)
+
+        return await fetch(__new__(Request(url, request)))
 
     @classmethod
     def _get_origin_url(cls, origin_raw_url, raw_url):
@@ -86,8 +92,9 @@ class Resource:
 
         origin_url = __new__(URL(origin_raw_url))
 
-        if origin_url.host not in config.ALLOWED_HOSTS + [url.origin]:
-            raise CdnError('host is not allowed: ' + origin_url.host, 403)
+        if config.ALLOWED_HOSTS:
+            if origin_url.host not in config.ALLOWED_HOSTS:
+                raise CdnError('host is not allowed: ' + origin_url.host, 403)
 
         return origin_url
 
@@ -97,17 +104,56 @@ class CacheResource(Resource):
     pass
 
 
-# @route(CdnRouter, '{}/image/width=(\d+|auto)/(.*)'.format(config.PREFIX))
-# class ImageResource(Resource):
-#     def __init__(self, url, width, origin_url):
-#         Resource.__init__(self, url, origin_url)
-#         self._transform_origin_url(width)
-#         log('Transformed Origin URL:', self.origin_url)
+@route(CdnRouter, '{}/image/width=(\d+|auto)/(.*)'.format(config.PREFIX))
+class ImageResource(Resource):
+    def __init__(self, url, width, origin_url):
+        self.width = width
+        Resource.__init__(self, url, origin_url)
 
-#     def _transform_origin_url(self, width):
-#         origin_url = __new__(URL(self.origin_url))
-#         origin_url.pathname += '-w{}'.format(width)
-#         self.origin_url = origin_url.toString()
+    async def fetch(self, request, url=None):
+        url = self._transform_url(request)
+        return await Resource.fetch(self, request, url)
+
+    def _transform_url(self, request):
+        # Get proper width
+        width = self._get_width(request, self.width)
+
+        # If width can not be fetched, fallback to origin
+        if width is None:
+            return self.origin_url
+
+        # Change the URL to include width
+        origin_url = __new__(URL(self.origin_url))
+        pathname_split = origin_url.pathname.rsplit('/')
+        orig_filename = pathname_split[len(pathname_split)-1]
+        filename = 'w{}-{}'.format(width, orig_filename)
+        pathname_split.append(filename)
+        origin_url.pathname += '/'.join(pathname_split)
+        return origin_url.toString()
+
+    @classmethod
+    def _get_width(cls, request, width):
+        # If auto, use Client Hints
+        if width == 'auto':
+            width = request.headers.js_get('Width') or None
+
+        # If None, the Width Client Hint is not enabled, fallback to origin
+        if width is None:
+            return None
+
+        # For allowed widths, return from a value the list
+        if config.ALLOWED_WIDTHS:
+            width = int(width)
+            for allowed_width in config.ALLOWED_WIDTHS:
+                allowed_width = int(allowed_width)
+                if allowed_width >= width:
+                    return str(allowed_width)
+
+            # No proper width found on the list
+            return None
+
+        # All widths are allowed, so return exact value
+        return width
 
 
 async def handleRequest(request):
@@ -116,16 +162,19 @@ async def handleRequest(request):
 
 
 async def handleEvent(event):
+    logger.debug('Config:', config)
+
     try:
         return await handleRequest(event.request)
     except (object) as exc:
         # TODO: enable Sentry
-        console.error(exc)
         if hasattr(exc, 'message'):
             error = exc.message
         else:
             error = str(exc)
-        return __new__(Response(JSON.stringify({'error': error}), {
+        body = JSON.stringify({'error': error})
+        logger.error('Error:', exc, body)
+        return __new__(Response(body, {
             'status': exc.status_code or 500,
             'headers': {'content-type' : 'text/json'},
         }))
