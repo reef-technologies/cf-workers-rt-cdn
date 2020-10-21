@@ -10,16 +10,13 @@
 
 import re
 
+import config
 
-class Config:
-    __slots__ = ('CDN_ALLOWED_HOSTS', 'CDN_PREFIX')
-
-    CDN_ALLOWED_HOSTS = JSON.parse(CDN_ALLOWED_HOSTS)
-    CDN_PREFIX = CDN_PREFIX
 
 
 def log(*args):
-    console.log(*args)
+    if config.DEBUG:
+        console.log(*args)
 
 
 
@@ -89,18 +86,18 @@ class Resource:
 
         origin_url = __new__(URL(origin_raw_url))
 
-        if origin_url.host not in Config.CDN_ALLOWED_HOSTS + [url.origin]:
+        if origin_url.host not in config.ALLOWED_HOSTS + [url.origin]:
             raise CdnError('host is not allowed: ' + origin_url.host, 403)
 
         return origin_url
 
 
-@route(CdnRouter, r'{}/cache/(.*)'.format(CDN_PREFIX))
+@route(CdnRouter, r'{}/cache/(.*)'.format(config.PREFIX))
 class CacheResource(Resource):
     pass
 
 
-# @route(CdnRouter, '{}/image/width=(\d+|auto)/(.*)'.format(CDN_PREFIX))
+# @route(CdnRouter, '{}/image/width=(\d+|auto)/(.*)'.format(config.PREFIX))
 # class ImageResource(Resource):
 #     def __init__(self, url, width, origin_url):
 #         Resource.__init__(self, url, origin_url)

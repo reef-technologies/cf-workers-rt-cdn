@@ -7,6 +7,7 @@ CDN worker for Cloudflare Workers.
 * NodeJS
 * Cloudflare Wrangler
 * Transcrypt
+* gettext
 
 For a fresh ubuntu you can install the above with:
 ```
@@ -27,32 +28,16 @@ pip install --user transcrypt
     * User.User Details
     * Zone.Workers Routes
 
-1. Enable Cloudflare Workers Bundled plan.
+1. Enable Cloudflare Workers Bundled plan if you need.
 
-**FoxTrap Workers setup:**
+**Cloudflare Worker setup:**
 
 1. Go to the repository
-1. Copy `wrangler.toml.template` to `wrangler.toml`
+1. Copy `.env.template` to `.env` and set your configuration there
 
-       cp wrangler.toml.template wrangler.toml
+       cp .env.template .env
 
-1. Set `account_id` and `zone_id` in `wrangler.toml`
-    * You can find `account_id` and `zone_id` in the overview page of you site in the Cloudflare Dashboard
-1. Set `route` and `vars` in `wrangler.toml`
-    * You can set different environments (default are: `dev`, `staging` and `production`)
-1. Set your Cloudflare API token:
+1. Publish the worker (the .env must loaded by your shell):
 
-       export CF_API_TOKEN=your_api_token
-
-1. Publish the worker:
-    * For `dev` environment:
-
-          wrangler publish
-
-    * For `staging` environment:
-
-          wrangler publish --env=staging
-
-    * For `production` environment:
-
-          wrangler publish --env=production
+       envsubst < wrangler.toml.template > wrangler.toml
+       wrangler publish

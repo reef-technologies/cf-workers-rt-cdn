@@ -11,4 +11,5 @@ node_modules/
 /__target__
 /env
 /.idea/
+.env
 wrangler.toml

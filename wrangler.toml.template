@@ -1,18 +1,10 @@
-name = "cdn-dev"
+name = "cdn-${CDN_ENV}"
 type = "webpack"
-account_id = "your_account_id"
-zone_id = "your_zone_id"
 workers_dev = false
 webpack_config = "webpack.config.js"
-route = "example.com/cdn-cgi-dev/*"
-vars = { CDN_PREFIX = "/cdn-cgi-dev", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]" }
 
-[env.staging]
-name = "cdn-staging"
-route = "example.com/cdn-cgi-staging/*"
-vars = { CDN_PREFIX = "/cdn-cgi-dev", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]" }
-
-[env.production]
-name = "cdn-prod"
-route = "example.com/cdn-cgi-prod/*"
-vars = { CDN_PREFIX = "/cdn-cgi-dev", CDN_ALLOWED_HOSTS = "[ \"example.com\" ]" }
+[vars]
+CDN_ENV = "${CDN_ENV}"
+CDN_DEBUG = "${CDN_DEBUG}"
+CDN_PREFIX = "${CDN_PREFIX}"
+CDN_ALLOWED_HOSTS = "${CDN_ALLOWED_HOSTS}"
