@@ -4,7 +4,7 @@
 #
 # Cloudflare Worker CDN
 #
-# Copyright (c) 2020, Reef Technologger.debugies. All Rights Reserved.
+# Copyright (c) 2020, Reef Technologies. All Rights Reserved.
 #
 ######################################################################
 
@@ -124,11 +124,12 @@ class ImageResource(Resource):
 
         # Change the URL to include width
         origin_url = __new__(URL(self.origin_url))
-        pathname_split = origin_url.pathname.rsplit('/')
+        pathname_split = origin_url.pathname.split('/')
         orig_filename = pathname_split[len(pathname_split)-1]
-        filename = 'w{}-{}'.format(width, orig_filename)
+        filename = self._get_filename(orig_filename, width)
         pathname_split.append(filename)
-        origin_url.pathname += '/'.join(pathname_split)
+        origin_url.pathname = '/'.join(pathname_split)
+
         return origin_url.toString()
 
     @classmethod
@@ -154,6 +155,26 @@ class ImageResource(Resource):
 
         # All widths are allowed, so return exact value
         return width
+
+    @classmethod
+    def _get_filename(cls, filename, width, override_ext=None):
+        if '.' in filename:
+            basename, ext = filename.rsplit('.', maxsplit=1)
+            if not basename:
+                basename = filename
+                ext = ''
+            else:
+                ext = '.' + ext
+        else:
+            basename = filename
+            ext = ''
+
+        if override_ext:
+            ext = '.' + override_ext
+
+        filename = '{}-{}w{}'.format(basename, width, ext)
+
+        return filename
 
 
 async def handleRequest(request):
