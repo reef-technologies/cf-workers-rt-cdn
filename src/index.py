@@ -1,6 +1,6 @@
 ######################################################################
 #
-# File: index.py
+# File: src/index.py
 #
 # Cloudflare Worker CDN
 #
@@ -8,10 +8,12 @@
 #
 ######################################################################
 
+# import mimetypes
 import re
 
 from src import config
 from src import logger
+from src import mimetypes
 
 
 class CdnError(Exception):
@@ -126,7 +128,7 @@ class ImageResource(Resource):
         origin_url = __new__(URL(self.origin_url))
         pathname_split = origin_url.pathname.split('/')
         orig_filename = pathname_split[len(pathname_split)-1]
-        filename = self._get_filename(orig_filename, width)
+        filename = self._get_filename(request, orig_filename, width)
         pathname_split.append(filename)
         origin_url.pathname = '/'.join(pathname_split)
 
@@ -157,20 +159,29 @@ class ImageResource(Resource):
         return width
 
     @classmethod
-    def _get_filename(cls, filename, width, override_ext=None):
+    def _get_filename(cls, request, filename, width):
         if '.' in filename:
             basename, ext = filename.rsplit('.', maxsplit=1)
             if not basename:
                 basename = filename
                 ext = ''
             else:
-                ext = '.' + ext
+                ext = ext.lower()
         else:
             basename = filename
             ext = ''
 
-        if override_ext:
-            ext = '.' + override_ext
+        accept = request.headers.js_get('Accept') or None
+        # For allowed formats, pick the first one that exist in Accept HTTP header
+        if config.ALLOWED_FORMATS and accept is not None:
+            for allowed_format in config.ALLOWED_FORMATS:
+                mimetype = mimetypes.guess_type(allowed_format)
+                if mimetype is not None and mimetype in accept:
+                    ext = allowed_format
+                    break
+
+        if ext:
+            ext = '.' + ext
 
         filename = '{}-{}w{}'.format(basename, width, ext)
 

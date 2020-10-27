@@ -1,6 +1,6 @@
 ######################################################################
 #
-# File: logger.py
+# File: src/logger.py
 #
 # Cloudflare Worker CDN
 #

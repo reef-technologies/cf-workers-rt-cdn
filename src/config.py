@@ -1,6 +1,6 @@
 ######################################################################
 #
-# File: config.py
+# File: src/config.py
 #
 # Cloudflare Worker CDN
 #
@@ -22,3 +22,7 @@ if ALLOWED_HOSTS[0] == '':
 ALLOWED_WIDTHS = CDN_ALLOWED_WIDTHS.split(',')
 if ALLOWED_WIDTHS[0] == '':
     ALLOWED_WIDTHS = None
+
+ALLOWED_FORMATS = CDN_ALLOWED_FORMATS.split(',')
+if ALLOWED_FORMATS[0] == '':
+    ALLOWED_FORMATS = None
