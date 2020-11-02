@@ -128,7 +128,10 @@ class ImageResource(Resource):
         origin_url = __new__(URL(self.origin_url))
         pathname_split = origin_url.pathname.split('/')
         orig_filename = pathname_split[len(pathname_split)-1]
+        dirname = '{}-cdn'.format(orig_filename)
         filename = self._get_filename(request, orig_filename, width)
+        pathname_split.pop()
+        pathname_split.append(dirname)
         pathname_split.append(filename)
         origin_url.pathname = '/'.join(pathname_split)
 
