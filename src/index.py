@@ -8,7 +8,6 @@
 #
 ######################################################################
 
-# import mimetypes
 import re
 
 from src import config
@@ -34,8 +33,8 @@ class CdnRouter:
     def __repr__(self):
         return '{}(request={})'.format(self.__class__.__name__, self.request)
 
-    def fetch(self):
-        return self.resource.fetch(self.request)
+    async def fetch(self):
+        return await self.resource.fetch(self.request)
 
     @classmethod
     def _get_pathname(cls, raw_url):
@@ -50,7 +49,7 @@ class CdnRouter:
         for route, klass in cls.routes:
             m = re.fullmatch(route, pathname)
             if m:
-                return klass(raw_url, *m.groups())
+                return klass(raw_url, **m.groupdict())
 
         raise CdnError('wrong URL: ' + raw_url, 400)
 
@@ -67,11 +66,13 @@ def route(router, path):
 
 
 class Resource:
+    __pragma__('kwargs')
     def __init__(self, url, origin_url):
         self.url = url
         self.origin_url = self._get_origin_url(origin_url, self.url)
 
         logger.debug('Resource:', self)
+    __pragma__('nokwargs')
 
     def __repr__(self):
         return '{}(url={}, origin_url={})'.format(self.__class__.__name__,
@@ -101,16 +102,18 @@ class Resource:
         return origin_url
 
 
-@route(CdnRouter, r'{}/cache/(.*)'.format(config.PREFIX))
+@route(CdnRouter, r'{}/cache/(?P<origin_url>.*)'.format(config.PREFIX))
 class CacheResource(Resource):
     pass
 
 
-@route(CdnRouter, '{}/image/width=(\d+|auto)/(.*)'.format(config.PREFIX))
+@route(CdnRouter, '{}/image/width=(?P<width>\d+|auto|orig)/(?P<origin_url>.*)'.format(config.PREFIX))
 class ImageResource(Resource):
-    def __init__(self, url, width, origin_url):
+    __pragma__('kwargs')
+    def __init__(self, url, origin_url, width):
         self.width = width
         Resource.__init__(self, url, origin_url)
+    __pragma__('nokwargs')
 
     async def fetch(self, request, url=None):
         url = self._transform_url(request)
@@ -139,16 +142,13 @@ class ImageResource(Resource):
 
     @classmethod
     def _get_width(cls, request, width):
-        # If auto, use Client Hints
-        if width == 'auto':
+        if width == 'auto':  # If auto, use Client Hints
             width = request.headers.js_get('Width') or None
+        elif width == 'orig':
+            width = None
 
-        # If None, the Width Client Hint is not enabled, fallback to origin
-        if width is None:
-            return None
-
-        # For allowed widths, return from a value the list
-        if config.ALLOWED_WIDTHS:
+        # For allowed widths, return the value from the list
+        if width is not None and config.ALLOWED_WIDTHS:
             width = int(width)
             for allowed_width in config.ALLOWED_WIDTHS:
                 allowed_width = int(allowed_width)
@@ -158,7 +158,7 @@ class ImageResource(Resource):
             # No proper width found on the list
             return None
 
-        # All widths are allowed, so return exact value
+        # All widths are allowed, so return exact value or None to fallback to the origin
         return width
 
     @classmethod
@@ -193,7 +193,7 @@ class ImageResource(Resource):
 
 async def handleRequest(request):
     cdn = CdnRouter(request)
-    return cdn.fetch()
+    return await cdn.fetch()
 
 
 async def handleEvent(event):
