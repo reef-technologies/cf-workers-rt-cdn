@@ -112,19 +112,48 @@ class ImageResource(Resource):
     __pragma__('kwargs')
     def __init__(self, url, origin_url, width):
         self.width = width
+        self.format = None  # TODO: add a possibility to set from URL, not only from HTTP Accept
         Resource.__init__(self, url, origin_url)
     __pragma__('nokwargs')
 
     async def fetch(self, request, url=None):
-        url = self._transform_url(request)
-        return await Resource.fetch(self, request, url)
+        self.width = self._get_width(request)
+        self.format = self._get_format(request)
+        url = self._transform_url()
+        response = await Resource.fetch(self, request, url)
 
-    def _transform_url(self, request):
-        # Get proper width
-        width = self._get_width(request, self.width)
+        if config.SERVER_PREFIX and response.status == 404:
+            url = '{}/image?origin={}&width={}&format={}'.format(
+                config.SERVER_PREFIX,
+                encodeURI(self.origin_url),
+                self.width,
+                self.format,
+            )
+            response = await self.fetch_via_server(request, url)
 
+        return response
+
+    async def fetch_via_server(self, request, url):
+        logger.debug('{}.fetch URL (via server):'.format(self.__class__.__name__), url)
+
+        response = await fetch(url, {
+            'method': 'GET',
+            'headers': {
+                'content-type': 'application/json',
+                config.SERVER_API_TOKEN_HEADER: 'ApiKey ' + config.SERVER_API_TOKEN,
+            },
+        })
+
+        if response.status == 200:
+            body = await response.json()
+            url = body['url']
+            return await Resource.fetch(self, request, url)
+
+        return response
+
+    def _transform_url(self):
         # If width can not be fetched, fallback to origin
-        if width is None:
+        if self.width is None:
             return self.origin_url
 
         # Change the URL to include width
@@ -132,7 +161,7 @@ class ImageResource(Resource):
         pathname_split = origin_url.pathname.split('/')
         orig_filename = pathname_split[len(pathname_split)-1]
         dirname = '{}-cdn'.format(orig_filename)
-        filename = self._get_filename(request, orig_filename, width)
+        filename = self._get_filename(orig_filename)
         pathname_split.pop()
         pathname_split.append(dirname)
         pathname_split.append(filename)
@@ -140,15 +169,16 @@ class ImageResource(Resource):
 
         return origin_url.toString()
 
-    @classmethod
-    def _get_width(cls, request, width):
-        if width == 'auto':  # If auto, use Client Hints
+    def _get_width(self, request):
+        if self.width == 'auto':  # If auto, use Client Hints
             width = request.headers.js_get('Width') or None
-        elif width == 'orig':
+        elif self.width == 'orig':
             width = None
+        else:
+            width = self.width
 
         # For allowed widths, return the value from the list
-        if width is not None and config.ALLOWED_WIDTHS:
+        if config.ALLOWED_WIDTHS and width is not None:
             width = int(width)
             for allowed_width in config.ALLOWED_WIDTHS:
                 allowed_width = int(allowed_width)
@@ -161,34 +191,41 @@ class ImageResource(Resource):
         # All widths are allowed, so return exact value or None to fallback to the origin
         return width
 
-    @classmethod
-    def _get_filename(cls, request, filename, width):
-        if '.' in filename:
-            basename, ext = filename.rsplit('.', maxsplit=1)
-            if not basename:
-                basename = filename
-                ext = ''
-            else:
-                ext = ext.lower()
-        else:
-            basename = filename
-            ext = ''
-
+    def _get_format(self, request):
         accept = request.headers.js_get('Accept') or None
         # For allowed formats, pick the first one that exist in Accept HTTP header
         if config.ALLOWED_FORMATS and accept is not None:
             for allowed_format in config.ALLOWED_FORMATS:
                 mimetype = mimetypes.guess_type(allowed_format)
                 if mimetype is not None and mimetype in accept:
-                    ext = allowed_format
-                    break
+                    return allowed_format
+
+        # Format can't be calculated from HTTP Accept header, use the file extension
+        return None
+
+    def _get_filename(self, filename):
+        # Set marker
+        if self.width is not None:
+            marker = '-{}w'.format(self.width)
+        else:
+            marker = ''
+
+        # Set extension
+        if '.' in filename:
+            basename, ext = filename.rsplit('.', maxsplit=1)
+            if not basename:
+                basename = filename
+                ext = self.format or ''
+            else:
+                ext = self.format or ext.lower()
+        else:
+            basename = filename
+            ext = self.format or ''
 
         if ext:
             ext = '.' + ext
 
-        filename = '{}-{}w{}'.format(basename, width, ext)
-
-        return filename
+        return ''.join([basename, marker, ext])
 
 
 async def handleRequest(request):
@@ -211,7 +248,7 @@ async def handleEvent(event):
         logger.error('Error:', exc, body)
         return __new__(Response(body, {
             'status': exc.status_code or 500,
-            'headers': {'content-type' : 'text/json'},
+            'headers': {'content-type': 'application/json'},
         }))
 
 
