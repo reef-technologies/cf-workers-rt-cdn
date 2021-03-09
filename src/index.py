@@ -82,9 +82,14 @@ class Resource:
         if url is None:
             url = self.origin_url
 
-        logger.debug('{}.fetch URL:'.format(self.__class__.__name__), url)
+        logger.debug('{}.fetch request:'.format(self.__class__.__name__), request)
+        logger.debug('{}.fetch url:'.format(self.__class__.__name__), url)
 
-        return await fetch(__new__(Request(url, request)))
+        response = await fetch(url, request)
+
+        logger.debug('{}.fetch response:'.format(self.__class__.__name__), response)
+
+        return response
 
     @classmethod
     def _get_origin_url(cls, origin_raw_url, raw_url):
@@ -116,33 +121,42 @@ class ImageResource(Resource):
         Resource.__init__(self, url, origin_url)
     __pragma__('nokwargs')
 
-    async def fetch(self, request, url=None):
+    async def fetch(self, request, url=None, init=None):
         self.width = self._get_width(request)
         self.format = self._get_format(request)
         url = self._transform_url()
-        response = await Resource.fetch(self, request, url)
 
-        if config.SERVER_PREFIX and response.status == 404:
-            url = '{}/image?origin={}&width={}&format={}'.format(
-                config.SERVER_PREFIX,
-                encodeURI(self.origin_url),
-                self.width,
-                self.format,
-            )
-            response = await self.fetch_via_server(request, url)
+        if config.SERVER_PREFIX:
+            request_head = __new__(Request(request, {'method': 'HEAD', 'cf': {'cacheTtl': 0}}))
+            response = await Resource.fetch(self, request_head, url)
+            if response.status == 404:
+                response = await self.fetch_via_server(request)
+            else:
+                response = await Resource.fetch(self, request, url)
+        else:
+            response = await Resource.fetch(self, request, url)
 
         return response
 
-    async def fetch_via_server(self, request, url):
-        logger.debug('{}.fetch URL (via server):'.format(self.__class__.__name__), url)
+    async def fetch_via_server(self, request):
+        url = '{}/image?origin={}&width={}&format={}&force=true'.format(
+            config.SERVER_PREFIX,
+            encodeURI(self.origin_url),
+            self.width,
+            self.format,
+        )
 
-        response = await fetch(url, {
+        request_server = __new__(Request(url, {
             'method': 'GET',
             'headers': {
                 'content-type': 'application/json',
                 config.SERVER_API_TOKEN_HEADER: 'ApiKey ' + config.SERVER_API_TOKEN,
             },
-        })
+            'cf': {
+                'cacheTtl': 0,
+            },
+        }))
+        response = await Resource.fetch(self, request_server, url)
 
         if response.status == 200:
             body = await response.json()
