@@ -139,22 +139,20 @@ class ImageResource(Resource):
         return response
 
     async def fetch_via_server(self, request):
-        url = '{}/image?origin={}&width={}&format={}&force=true'.format(
-            config.SERVER_PREFIX,
-            encodeURI(self.origin_url),
-            self.width,
-            self.format,
-        )
+        url = '{}/images'.format(config.SERVER_PREFIX)
 
         request_server = __new__(Request(url, {
-            'method': 'GET',
+            'method': 'POST',
             'headers': {
                 'content-type': 'application/json',
                 config.SERVER_API_TOKEN_HEADER: 'ApiKey ' + config.SERVER_API_TOKEN,
             },
-            'cf': {
-                'cacheTtl': 0,
-            },
+            'body': JSON.stringify({
+                'origin': self.origin_url,
+                'width': self.width,
+                'format': self.format,
+                'force': True,
+            })
         }))
         response = await Resource.fetch(self, request_server, url)
 
