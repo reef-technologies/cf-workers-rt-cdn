@@ -112,12 +112,12 @@ class CacheResource(Resource):
     pass
 
 
-@route(CdnRouter, '{}/image/width=(?P<width>\d+|auto|orig)/(?P<origin_url>.*)'.format(config.PREFIX))
+@route(CdnRouter, '{}/image/width=(?P<width>\d+|auto|orig),format=(?P<format>\w+)/(?P<origin_url>.*)'.format(config.PREFIX))
 class ImageResource(Resource):
     __pragma__('kwargs')
-    def __init__(self, url, origin_url, width):
+    def __init__(self, url, origin_url, width, format):
         self.width = width
-        self.format = None  # TODO: add a possibility to set from URL, not only from HTTP Accept
+        self.format = format
         Resource.__init__(self, url, origin_url)
     __pragma__('nokwargs')
 
@@ -129,7 +129,7 @@ class ImageResource(Resource):
         if config.SERVER_PREFIX:
             request_head = __new__(Request(request, {'method': 'HEAD', 'cf': {'cacheTtl': 0}}))
             response = await Resource.fetch(self, request_head, url)
-            if response.status == 404:
+            if not response.ok:
                 response = await self.fetch_via_server(request)
             else:
                 response = await Resource.fetch(self, request, url)
@@ -164,8 +164,8 @@ class ImageResource(Resource):
         return response
 
     def _transform_url(self):
-        # If width can not be fetched, fallback to origin
-        if self.width is None:
+        # If width and format can not be fetched, fallback to origin
+        if self.width is None and self.format is None:
             return self.origin_url
 
         # Change the URL to include width
@@ -204,7 +204,13 @@ class ImageResource(Resource):
         return width
 
     def _get_format(self, request):
-        accept = request.headers.js_get('Accept') or None
+        if self.format == 'auto':  # If auto, use Accept header
+            accept = request.headers.js_get('Accept') or None
+        elif self.format == 'orig':
+            accept = None
+        else:
+            accept = mimetypes.guess_type(self.format)
+
         # For allowed formats, pick the first one that exist in Accept HTTP header
         if config.ALLOWED_FORMATS and accept is not None:
             for allowed_format in config.ALLOWED_FORMATS:
@@ -220,7 +226,7 @@ class ImageResource(Resource):
         if self.width is not None:
             marker = '-{}w'.format(self.width)
         else:
-            marker = ''
+            marker = '-orig'
 
         # Set extension
         if '.' in filename:
