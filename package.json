@@ -20,6 +20,6 @@
     "y18n": ">=4.0.1"
   },
   "dependencies": {
-    "@cloudflare/wrangler": "^1.15.0"
+    "@cloudflare/wrangler": "^1.21.0"
   }
 }
